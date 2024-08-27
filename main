@@ -1,0 +1,241 @@
+import sys
+import pygame
+import pygame.gfxdraw
+import numpy as np
+
+# Initialization code and constants
+pygame.init()
+
+# Colors and other constants
+WHITE = (255, 255, 255)
+GRAY = (180, 180, 180)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLACK = (0, 0, 0)
+ORANGE1 = (224, 195, 252)
+ORANGE2 = (218, 182, 252)
+ORANGE3 = (187, 173, 255)
+BLUE1 = (202, 244, 255)
+BLUE2 = (160, 222, 255)
+BLUE3 = (90, 178, 255)
+
+WIDTH = 600
+HEIGHT = 700  # Increased height for the shape selection GUI and player status
+LINE_WIDTH = 5
+BOARD_ROWS = 3
+BOARD_COLS = 3
+SQUARE_SIZE = WIDTH // BOARD_COLS
+CIRCLE_RADIUS = SQUARE_SIZE // 2.7
+CIRCLE_WIDTH = 8
+
+BUTTON_HEIGHT = 50
+BUTTON_WIDTH = WIDTH // 3
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption('TIC TAC TOE ROO')
+screen.fill(BLACK)
+
+board = [[(0, 0) for _ in range(BOARD_COLS)] for _ in range(BOARD_ROWS)]
+player_turn = 1
+selected_shape = 'circle'  # Default shape
+
+# Remaining moves for each player
+moves_left = {
+    1: {'circle': 2, 'square': 3, 'triangle': 3},
+    2: {'circle': 2, 'square': 3, 'triangle': 3}
+}
+
+def draw_lines(color=WHITE):
+    """Draw the grid lines on the board."""
+    for i in range(1, BOARD_ROWS):
+        pygame.draw.line(screen, color,
+                         (0, SQUARE_SIZE * i),
+                         (WIDTH, SQUARE_SIZE * i), LINE_WIDTH)
+    for i in range(1, BOARD_COLS):
+        pygame.draw.line(screen, color,
+                         (SQUARE_SIZE * i, 0),
+                         (SQUARE_SIZE * i, HEIGHT - BUTTON_HEIGHT - 60), LINE_WIDTH)  # Adjusted for status display
+
+def draw_all_game_pieces(screen, game_pieces):
+    """Draw all the game pieces on the board."""
+    for pieces in game_pieces:
+        row = pieces['position'][0]
+        col = pieces['position'][1]
+        size = pieces['size']
+        player = pieces['player']
+
+        center_x = int(col * SQUARE_SIZE + SQUARE_SIZE // 2)
+        center_y = int(row * SQUARE_SIZE + SQUARE_SIZE // 2)
+
+        if size == 3:
+            radius = int(CIRCLE_RADIUS)
+            color = ORANGE3 if player == 1 else BLUE3
+            pygame.gfxdraw.filled_circle(screen, center_x, center_y, radius, color)
+            pygame.gfxdraw.aacircle(screen, center_x, center_y, radius, color)
+
+        elif size == 2:
+            square_width = CIRCLE_RADIUS / np.sqrt(2) * 0.8
+            color = ORANGE2 if player == 1 else BLUE2
+            pygame.draw.rect(screen, color, (int(center_x - square_width), int(center_y - square_width), square_width * 2, square_width * 2))
+
+        elif size == 1:
+            side_length = CIRCLE_RADIUS / np.sqrt(2) * 0.8 * 2 * 0.78
+            height = side_length * (np.sqrt(3) / 2)
+            v1 = (center_x, center_y - 2 / 3 * height)
+            v2 = (center_x - side_length / 2, center_y + 1 / 3 * height)
+            v3 = (center_x + side_length / 2, center_y + 1 / 3 * height)
+            color = ORANGE1 if player == 1 else BLUE1
+            pygame.draw.polygon(screen, color, [v1, v2, v3])
+
+def mark_square(row, col, player, size):
+    """Mark a square on the board if valid."""
+    current_player, current_size = board[row][col]
+    if (size > current_size) or (current_player == 0):
+        board[row][col] = (player, size)
+        return True
+    return False
+
+def is_board_full():
+    """Check if the board is full."""
+    return all(cell[0] != 0 for row in board for cell in row)
+
+def check_win(player):
+    """Check if the given player has won."""
+    # Check rows
+    for row in range(BOARD_ROWS):
+        if all(cell[0] == player for cell in board[row]):
+            return True
+
+    # Check columns
+    for col in range(BOARD_COLS):
+        if all(board[row][col][0] == player for row in range(BOARD_ROWS)):
+            return True
+
+    # Check diagonals
+    if all(board[i][i][0] == player for i in range(BOARD_ROWS)):
+        return True
+    if all(board[i][BOARD_COLS - 1 - i][0] == player for i in range(BOARD_ROWS)):
+        return True
+
+    return False
+
+def restart_game():
+    """Restart the game by resetting the board and state."""
+    global moves_left, selected_shape
+    screen.fill(BLACK)
+    draw_lines()
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS):
+            board[row][col] = (0, 0)
+    
+    # Reset the remaining moves
+    moves_left = {
+        1: {'circle': 2, 'square': 3, 'triangle': 3},
+        2: {'circle': 2, 'square': 3, 'triangle': 3}
+    }
+    
+    # Reset the selected shape
+    selected_shape = 'circle'
+
+def draw_shape_buttons():
+    """Draw the buttons for selecting shapes."""
+    pygame.draw.rect(screen, ORANGE3 if selected_shape == 'circle' else GRAY, (0, HEIGHT - BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT))
+    pygame.draw.rect(screen, ORANGE2 if selected_shape == 'square' else GRAY, (BUTTON_WIDTH, HEIGHT - BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT))
+    pygame.draw.rect(screen, ORANGE1 if selected_shape == 'triangle' else GRAY, (2 * BUTTON_WIDTH, HEIGHT - BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT))
+
+    font = pygame.font.SysFont(None, 36)
+    circle_text = font.render('Circle', True, BLACK)
+    square_text = font.render('Square', True, BLACK)
+    triangle_text = font.render('Triangle', True, BLACK)
+
+    screen.blit(circle_text, (BUTTON_WIDTH // 2 - circle_text.get_width() // 2, HEIGHT - BUTTON_HEIGHT // 2 - circle_text.get_height() // 2))
+    screen.blit(square_text, (BUTTON_WIDTH + BUTTON_WIDTH // 2 - square_text.get_width() // 2, HEIGHT - BUTTON_HEIGHT // 2 - square_text.get_height() // 2))
+    screen.blit(triangle_text, (2 * BUTTON_WIDTH + BUTTON_WIDTH // 2 - triangle_text.get_width() // 2, HEIGHT - BUTTON_HEIGHT // 2 - triangle_text.get_height() // 2))
+
+def handle_button_click(pos):
+    """Handles button clicks for selecting shapes."""
+    global selected_shape
+    if pos[1] > HEIGHT - BUTTON_HEIGHT:
+        if pos[0] < BUTTON_WIDTH:
+            selected_shape = 'circle'
+        elif pos[0] < 2 * BUTTON_WIDTH:
+            selected_shape = 'square'
+        else:
+            selected_shape = 'triangle'
+
+def draw_player_status():
+    """Draw the status of each player including remaining moves."""
+    font = pygame.font.SysFont(None, 24)
+    y_offset = 10
+    for player in [1, 2]:
+        text = f"Player {player}:"
+        color = ORANGE3 if player == 1 else BLUE3
+        text_surface = font.render(text, True, color)
+        
+        if player == 1:
+            screen.blit(text_surface, (10, y_offset))
+            for i, (shape, count) in enumerate(moves_left[player].items()):
+                shape_text = f"{shape.capitalize()}: {count}"
+                shape_surface = font.render(shape_text, True, color)
+                screen.blit(shape_surface, (10, y_offset + (i+1)*25))
+        else:
+            screen.blit(text_surface, (WIDTH - text_surface.get_width() - 10, y_offset))
+            for i, (shape, count) in enumerate(moves_left[player].items()):
+                shape_text = f"{shape.capitalize()}: {count}"
+                shape_surface = font.render(shape_text, True, color)
+                screen.blit(shape_surface, (WIDTH - shape_surface.get_width() - 10, y_offset + (i+1)*25))
+
+    y_offset += 30
+
+def main():
+    """Main game loop."""
+    global player_turn
+    draw_lines()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouseX, mouseY = event.pos
+
+                if mouseY > HEIGHT - BUTTON_HEIGHT:
+                    handle_button_click((mouseX, mouseY))
+                else:
+                    clicked_row = int(mouseY // SQUARE_SIZE)
+                    clicked_col = int(mouseX // SQUARE_SIZE)
+
+                    if board[clicked_row][clicked_col][1] != 3:  # Can't overlap Circle
+                        if board[clicked_row][clicked_col] == (0, 0):
+                            size = 1 if selected_shape == 'triangle' else 2 if selected_shape == 'square' else 3
+                        else:
+                            size = board[clicked_row][clicked_col][1] + 1
+
+                        if moves_left[player_turn][selected_shape] > 0:
+                            if mark_square(clicked_row, clicked_col, player_turn, size):
+                                moves_left[player_turn][selected_shape] -= 1
+
+                                if check_win(player_turn):
+                                    print(f'Player {player_turn} wins!')
+                                    restart_game()
+
+                                player_turn = 3 - player_turn  # Switch turn
+
+        screen.fill(BLACK)
+        draw_lines()
+        draw_all_game_pieces(screen, [
+            {'position': (row, col), 'size': board[row][col][1], 'player': board[row][col][0]}
+            for row in range(BOARD_ROWS)
+            for col in range(BOARD_COLS)
+            if board[row][col][0] != 0
+        ])
+
+        draw_shape_buttons()
+        draw_player_status()
+
+        pygame.display.update()
+
+if __name__ == '__main__':
+    main()
